@@ -4,7 +4,7 @@ use enclaver::{
     build::EnclaveArtifactBuilder, build::ResolvedSources, constants::MANIFEST_FILE_NAME,
     images::ImageRef, manifest::load_manifest, nitro_cli::EIFMeasurements, run_container::Sleeve,
 };
-use log::{debug, error};
+use log::{debug, error, info};
 
 #[derive(Debug, Parser)]
 #[clap(author, version)]
@@ -33,6 +33,18 @@ enum Commands {
         #[clap(long = "pull")]
         /// Pull every container image to ensure the latest version
         force_pull: bool,
+
+        #[clap(long = "multi-arch")]
+        /// Build multi-architecture images for both AMD64 and ARM64
+        multi_arch: bool,
+
+        #[clap(long = "push")]
+        /// Push the built image to a registry after building
+        push: bool,
+
+        #[clap(long = "nitro-cli-image")]
+        /// Custom nitro-cli Docker image to use for EIF building
+        nitro_cli_image: Option<String>,
     },
 
     #[clap(name = "run")]
@@ -78,10 +90,26 @@ async fn run(args: Cli) -> Result<()> {
             manifest_file,
             eif_file: None,
             force_pull,
+            multi_arch,
+            push,
+            nitro_cli_image,
         } => {
             let builder = EnclaveArtifactBuilder::new(force_pull)?;
-            let (eif_info, resolved_sources, release_img) =
-                builder.build_release(&manifest_file).await?;
+            let (eif_info, resolved_sources, release_img) = if multi_arch {
+                builder.build_release_multi_arch(&manifest_file, push, nitro_cli_image.as_deref()).await?
+            } else {
+                builder.build_release(&manifest_file, nitro_cli_image.as_deref()).await?
+            };
+
+            // Push the image if requested
+            if push {
+                info!("📤 Pushing image to registry: {}", release_img.name.as_ref().unwrap_or(&"unknown".to_string()));
+                // For multi-arch builds, the final image is already pushed during the build process
+                // For single-arch builds, push the final image
+                if !multi_arch {
+                    builder.push_image(&release_img).await?;
+                }
+            }
 
             let build_summary = BuildSummary {
                 sources: resolved_sources,

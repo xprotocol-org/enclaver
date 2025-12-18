@@ -15,6 +15,7 @@ use log::debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct SigningInfo {
     pub key: PathBuf,
     pub certificate: PathBuf,
@@ -23,11 +24,20 @@ pub struct SigningInfo {
 pub struct NitroCLIContainer {
     docker: Arc<Docker>,
     image: ImageRef,
+    _platform: Option<String>,
 }
 
 impl NitroCLIContainer {
     pub fn new(docker: Arc<Docker>, image: ImageRef) -> Self {
-        Self { docker, image }
+        Self { docker, image, _platform: None }
+    }
+
+    pub fn new_platform(docker: Arc<Docker>, image: ImageRef, platform: &str) -> Self {
+        Self {
+            docker,
+            image,
+            _platform: Some(platform.to_string()),
+        }
     }
 
     pub async fn build_enclave(
@@ -83,10 +93,19 @@ impl NitroCLIContainer {
             });
         }
 
+        let options = if let Some(platform) = &self._platform {
+            Some(CreateContainerOptions {
+                name: None, // Let Docker generate a name
+                platform: platform.to_string(),
+            })
+        } else {
+            None
+        };
+
         let container_id = self
             .docker
             .create_container(
-                None::<CreateContainerOptions>,
+                options,
                 ContainerCreateBody {
                     image: Some(self.image.to_string()),
                     cmd: Some(cmd.iter().map(|s| s.to_string()).collect()),

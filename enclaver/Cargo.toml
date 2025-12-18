@@ -99,3 +99,11 @@ odyn = ["vsock", "proxy"]
 proxy = ["vsock"]
 vsock = ["dep:tokio-vsock", "dep:rtnetlink"]
 tracing = ["dep:console-subscriber", "tokio/tracing"]
+
+# Optimized release profile for smaller binary size
+[profile.release]
+opt-level = "z"      # Optimize for size
+lto = true           # Link-time optimization (enables dead code elimination)
+codegen-units = 1    # Better optimization at cost of compile time
+panic = "abort"      # Smaller binary, no unwinding
+strip = true         # Strip symbols from binary

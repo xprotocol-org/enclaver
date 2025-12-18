@@ -1,4 +1,5 @@
-FROM public.ecr.aws/s2t1d4c6/enclaver-io/nitro-cli:latest AS nitro_cli
+ARG NITRO_CLI_IMAGE=public.ecr.aws/s2t1d4c6/enclaver-io/nitro-cli:latest
+FROM ${NITRO_CLI_IMAGE} AS nitro_cli
 RUN touch /tmp/dummy
 
 ###############################
@@ -23,6 +24,6 @@ COPY --from=nitro_cli /usr/bin/nitro-cli /bin/nitro-cli
 COPY --from=nitro_cli /tmp/dummy /var/log/nitro_enclaves/
 COPY --from=nitro_cli /tmp/dummy /run/nitro_enclaves/
 
-COPY --from=artifacts ${TARGETARCH}/enclaver-run /usr/local/bin/enclaver-run
+COPY ./${TARGETARCH}/enclaver-run /usr/local/bin/enclaver-run
 
 ENTRYPOINT ["/usr/local/bin/enclaver-run"]

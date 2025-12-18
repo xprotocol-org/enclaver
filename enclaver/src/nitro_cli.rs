@@ -106,13 +106,13 @@ impl NitroCLI {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EIFInfo {
     #[serde(rename = "Measurements")]
     pub measurements: EIFMeasurements,
 }
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EIFMeasurements {
     #[serde(rename = "PCR0")]
     pub pcr0: String,

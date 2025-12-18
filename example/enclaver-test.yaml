@@ -1,6 +1,6 @@
 version: v1
 name: "example"
-target: "enclave:latest"
+target: "${REGISTRY}/enclave:${TAG}"
 sources:
   app: "my-app:latest"
   odyn: "odyn-dev:latest"

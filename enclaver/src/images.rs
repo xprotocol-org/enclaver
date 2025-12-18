@@ -1,8 +1,8 @@
 use crate::utils::StringablePathExt;
 use anyhow::{Context, Result, anyhow, bail};
 use bollard::Docker;
-use bollard::models::{BuildInfo, CreateImageInfo, ImageId};
-use bollard::query_parameters::{BuildImageOptions, CreateImageOptions, TagImageOptions};
+use bollard::models::{BuildInfo, ImageId};
+use bollard::query_parameters::BuildImageOptions;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use log::{debug, trace};
 use std::fmt;
@@ -107,29 +107,20 @@ impl ImageManager {
         }
     }
 
-    /// Pull an image from a remote registry, if it is not already present, while streaming
-    /// output to the terminal.
     pub async fn pull_image(&self, image_name: &str) -> Result<ImageRef> {
         debug!("fetching image: {}", image_name);
-        let mut fetch_stream = self.docker.create_image(
-            Some(CreateImageOptions {
-                from_image: Some(image_name.to_string()),
-                ..Default::default()
-            }),
-            None,
-            None,
-        );
 
-        while let Some(item) = fetch_stream.next().await {
-            let create_image_info = item?;
-            if let CreateImageInfo {
-                id: Some(id),
-                status: Some(status),
-                ..
-            } = create_image_info
-            {
-                debug!("{}: {}", id, status);
-            }
+        let output = tokio::process::Command::new("docker")
+            .args(["pull", image_name])
+            .output()
+            .await?;
+
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            debug!("Pull output: {}", stdout.trim());
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow!("Failed to pull image {}: {}", image_name, stderr));
         }
 
         self.image(image_name).await
@@ -194,19 +185,18 @@ impl ImageManager {
         }
     }
 
-    /// Tag an image.
     pub async fn tag_image(&self, img: &ImageRef, tag: &str) -> Result<()> {
-        self.docker
-            .tag_image(
-                img.to_str(),
-                Some(TagImageOptions {
-                    repo: Some(tag.to_string()),
-                    ..Default::default()
-                }),
-            )
+        let output = tokio::process::Command::new("docker")
+            .args(["tag", img.to_str(), tag])
+            .output()
             .await?;
 
-        Ok(())
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(anyhow!("Failed to tag image {} as {}: {}", img.to_str(), tag, stderr))
+        }
     }
 }
 

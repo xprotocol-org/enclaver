@@ -1,4 +1,32 @@
-FROM public.ecr.aws/s2t1d4c6/enclaver-io/nitro-cli:latest AS nitro_cli
+ARG NITRO_CLI_IMAGE=public.ecr.aws/s2t1d4c6/enclaver-io/nitro-cli:latest
+ARG TARGETARCH
+
+FROM --platform=$BUILDPLATFORM ghcr.io/rust-cross/cargo-zigbuild:latest AS builder
+ARG TARGETARCH
+ARG BUILDPLATFORM
+
+RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+
+RUN case "$TARGETARCH" in \
+        amd64) RUST_TARGET=x86_64-unknown-linux-musl ;; \
+        arm64) RUST_TARGET=aarch64-unknown-linux-musl ;; \
+        *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
+    esac && \
+    rustup target add $RUST_TARGET
+
+WORKDIR /build
+COPY . .
+
+RUN case "$TARGETARCH" in \
+        amd64) RUST_TARGET=x86_64-unknown-linux-musl ;; \
+        arm64) RUST_TARGET=aarch64-unknown-linux-musl ;; \
+    esac && \
+    cargo zigbuild --release --target $RUST_TARGET --features run_enclave,odyn && \
+    cp target/$RUST_TARGET/release/enclaver-run /enclaver-run
+
+###############################
+
+FROM ${NITRO_CLI_IMAGE} AS nitro_cli
 RUN touch /tmp/dummy
 
 ###############################
@@ -23,6 +51,6 @@ COPY --from=nitro_cli /usr/bin/nitro-cli /bin/nitro-cli
 COPY --from=nitro_cli /tmp/dummy /var/log/nitro_enclaves/
 COPY --from=nitro_cli /tmp/dummy /run/nitro_enclaves/
 
-COPY ./enclaver-run /usr/local/bin/enclaver-run
+COPY --from=builder /enclaver-run /usr/local/bin/enclaver-run
 
 ENTRYPOINT ["/usr/local/bin/enclaver-run"]
